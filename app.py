@@ -1,4 +1,7 @@
 import os
+
+# Force TensorFlow to use legacy Keras 2 deserialization format
+os.environ["TF_USE_LEGACY_KERAS"] = "1"
 import io
 import cv2
 import numpy as np
@@ -16,7 +19,7 @@ BEHAVIOR_PATH = os.path.join(BASE_DIR, 'models', 'driver_behavior_cnn.h5')
 
 # Load models from the models directory
 yolo_model = YOLO(YOLO_PATH)
-behavior_model = tf.keras.models.load_model(BEHAVIOR_PATH)
+behavior_model = tf.keras.models.load_model(BEHAVIOR_PATH, compile=False)
 
 DRIVER_STATES = [
     "Safe Driving", "Texting (Right)", "Talking on Phone (Right)", 
