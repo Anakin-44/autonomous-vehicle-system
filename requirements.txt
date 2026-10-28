@@ -1,7 +1,10 @@
-flask
-gunicorn
-tensorflow-cpu
-ultralytics
-opencv-python-headless
-Pillow
-numpy
+flask>=3.0.0
+gunicorn>=21.2.0
+tensorflow-cpu>=2.15.0
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch
+torchvision
+ultralytics>=8.0.0
+opencv-python-headless>=4.8.0
+Pillow>=10.0.0
+numpy>=1.24.0,<2.0.0

@@ -9,9 +9,14 @@ from ultralytics import YOLO
 
 app = Flask(__name__, template_folder='templates')
 
+# Resolve absolute path to models directory
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+YOLO_PATH = os.path.join(BASE_DIR, 'models', 'yolov8n.pt')
+BEHAVIOR_PATH = os.path.join(BASE_DIR, 'models', 'driver_behavior_cnn.h5')
+
 # Load models from the models directory
-yolo_model = YOLO('models/yolov8n.pt')
-behavior_model = tf.keras.models.load_model('models/driver_behavior_cnn.h5')
+yolo_model = YOLO(YOLO_PATH)
+behavior_model = tf.keras.models.load_model(BEHAVIOR_PATH)
 
 DRIVER_STATES = [
     "Safe Driving", "Texting (Right)", "Talking on Phone (Right)", 
@@ -40,9 +45,9 @@ def analyze():
     person_count = 0
     for box in yolo_results[0].boxes:
         cls_id = int(box.cls[0])
-        if cls_id in [2, 3, 5, 7]:
+        if cls_id in [2, 3, 5, 7]:  # Car, Motorcycle, Bus, Truck
             vehicle_count += 1
-        elif cls_id == 0:
+        elif cls_id == 0:  # Person
             person_count += 1
     obj_text = f"Vehicles: {vehicle_count}, Pedestrians: {person_count}"
 
