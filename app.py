@@ -1,6 +1,4 @@
 import os
-
-
 import io
 import cv2
 import numpy as np
@@ -16,9 +14,23 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 YOLO_PATH = os.path.join(BASE_DIR, 'models', 'yolov8n.pt')
 BEHAVIOR_PATH = os.path.join(BASE_DIR, 'models', 'driver_behavior_cnn.h5')
 
+# Custom InputLayer to bridge Keras 3 -> Keras 2 config deserialization
+class FixedInputLayer(tf.keras.layers.InputLayer):
+    @classmethod
+    def from_config(cls, config):
+        config = config.copy()
+        if 'batch_shape' in config:
+            config['batch_input_shape'] = config.pop('batch_shape')
+        config.pop('optional', None)
+        return super().from_config(config)
+
 # Load models from the models directory
 yolo_model = YOLO(YOLO_PATH)
-behavior_model = tf.keras.models.load_model(BEHAVIOR_PATH, compile=False)
+behavior_model = tf.keras.models.load_model(
+    BEHAVIOR_PATH, 
+    custom_objects={'InputLayer': FixedInputLayer}, 
+    compile=False
+)
 
 DRIVER_STATES = [
     "Safe Driving", "Texting (Right)", "Talking on Phone (Right)", 
