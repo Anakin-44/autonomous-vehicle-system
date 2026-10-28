@@ -1,7 +1,6 @@
 import os
 
-# Force TensorFlow to use legacy Keras 2 deserialization format
-os.environ["TF_USE_LEGACY_KERAS"] = "1"
+
 import io
 import cv2
 import numpy as np
