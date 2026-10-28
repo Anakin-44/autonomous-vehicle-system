@@ -1,0 +1,350 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Autonomous Vehicle Intelligence System</title>
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="manifest" href="/static/manifest.json" />
+    <meta name="theme-color" content="#2563eb" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta
+      name="apple-mobile-web-app-status-bar-style"
+      content="black-translucent"
+    />
+    <meta name="apple-mobile-web-app-title" content="AV System" />
+    <style>
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+
+      body {
+        font-family:
+          "Inter",
+          -apple-system,
+          BlinkMacSystemFont,
+          "Segoe UI",
+          Roboto,
+          sans-serif;
+        background-color: #f8fafc;
+        color: #0f172a;
+        min-height: 100vh;
+        padding: 40px 20px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+      }
+
+      .container {
+        width: 100%;
+        max-width: 800px;
+      }
+
+      header {
+        margin-bottom: 28px;
+        text-align: center;
+      }
+
+      header h1 {
+        font-size: 1.75rem;
+        font-weight: 700;
+        color: #0f172a;
+        margin-bottom: 6px;
+      }
+
+      header p {
+        font-size: 0.95rem;
+        color: #64748b;
+      }
+
+      .card {
+        background: #ffffff;
+        border: 1px solid #e2e8f0;
+        border-radius: 12px;
+        padding: 24px;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+        margin-bottom: 20px;
+      }
+
+      .upload-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+        gap: 20px;
+        margin-bottom: 20px;
+      }
+
+      .upload-box {
+        border: 2px dashed #cbd5e1;
+        border-radius: 8px;
+        padding: 20px;
+        text-align: center;
+        background-color: #fafafa;
+        transition:
+          border-color 0.2s,
+          background-color 0.2s;
+      }
+
+      .upload-box:hover {
+        border-color: #2563eb;
+        background-color: #f0f6ff;
+      }
+
+      .upload-box h3 {
+        font-size: 1rem;
+        font-weight: 600;
+        margin-bottom: 4px;
+      }
+
+      .upload-box p {
+        font-size: 0.85rem;
+        color: #64748b;
+        margin-bottom: 14px;
+      }
+
+      .preview-box {
+        width: 100%;
+        height: 140px;
+        background: #e2e8f0;
+        border-radius: 6px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin-bottom: 14px;
+        overflow: hidden;
+      }
+
+      .preview-box img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        display: none;
+      }
+
+      .preview-box span {
+        font-size: 0.8rem;
+        color: #64748b;
+      }
+
+      input[type="file"] {
+        display: none;
+      }
+
+      .btn-select {
+        display: inline-block;
+        padding: 8px 16px;
+        font-size: 0.85rem;
+        font-weight: 500;
+        color: #2563eb;
+        background: #eff6ff;
+        border: 1px solid #bfdbfe;
+        border-radius: 6px;
+        cursor: pointer;
+        transition: background 0.2s;
+      }
+
+      .btn-select:hover {
+        background: #dbeafe;
+      }
+
+      .btn-primary {
+        width: 100%;
+        padding: 12px;
+        font-size: 0.95rem;
+        font-weight: 600;
+        color: #ffffff;
+        background-color: #2563eb;
+        border: none;
+        border-radius: 8px;
+        cursor: pointer;
+        transition: background-color 0.2s;
+      }
+
+      .btn-primary:hover {
+        background-color: #1d4ed8;
+      }
+
+      .btn-primary:disabled {
+        background-color: #94a3b8;
+        cursor: not-allowed;
+      }
+
+      .results {
+        display: none;
+      }
+
+      .results h2 {
+        font-size: 1.05rem;
+        font-weight: 600;
+        margin-bottom: 16px;
+        padding-bottom: 8px;
+        border-bottom: 1px solid #e2e8f0;
+      }
+
+      .results-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+        gap: 16px;
+      }
+
+      .result-item {
+        background: #f8fafc;
+        border: 1px solid #e2e8f0;
+        border-radius: 8px;
+        padding: 14px;
+      }
+
+      .result-item label {
+        display: block;
+        font-size: 0.75rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        color: #64748b;
+        margin-bottom: 4px;
+      }
+
+      .result-item p {
+        font-size: 0.9rem;
+        font-weight: 600;
+        color: #0f172a;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <header>
+        <h1>Autonomous Vehicle Intelligence System</h1>
+        <p>Upload vehicle camera feeds to run deep learning inference models</p>
+      </header>
+
+      <div class="card">
+        <div class="upload-grid">
+          <!-- Dashcam Input -->
+          <div class="upload-box">
+            <h3>Front Dashcam View</h3>
+            <p>Road environment image</p>
+            <div class="preview-box">
+              <span id="dash-ph">No image selected</span>
+              <img id="dash-img-preview" alt="Dashcam Preview" />
+            </div>
+            <label for="dashcam" class="btn-select">Select Dashcam Image</label>
+            <input
+              type="file"
+              id="dashcam"
+              accept="image/*"
+              onchange="handlePreview('dashcam', 'dash-img-preview', 'dash-ph')"
+            />
+          </div>
+
+          <!-- Cabin Input -->
+          <div class="upload-card upload-box">
+            <h3>Interior Cabin View</h3>
+            <p>Driver monitoring feed</p>
+            <div class="preview-box">
+              <span id="cab-ph">No image selected</span>
+              <img id="cab-img-preview" alt="Cabin Preview" />
+            </div>
+            <label for="cabin" class="btn-select">Select Cabin Image</label>
+            <input
+              type="file"
+              id="cabin"
+              accept="image/*"
+              onchange="handlePreview('cabin', 'cab-img-preview', 'cab-ph')"
+            />
+          </div>
+        </div>
+
+        <button class="btn-primary" id="analyze-btn" onclick="analyzeData()">
+          Analyze Feeds
+        </button>
+      </div>
+
+      <div class="card results" id="results">
+        <h2>Model Output Results</h2>
+        <div class="results-grid">
+          <div class="result-item">
+            <label>Object Detection (YOLOv8)</label>
+            <p id="res-obj">Processing...</p>
+          </div>
+          <div class="result-item">
+            <label>Driver Behavior (MobileNetV2)</label>
+            <p id="res-drv">Processing...</p>
+          </div>
+          <div class="result-item">
+            <label>Traffic Sign Recognition</label>
+            <p id="res-sgn">Processing...</p>
+          </div>
+          <div class="result-item">
+            <label>Road Lane Detection (U-Net)</label>
+            <p id="res-lane">Processing...</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      function handlePreview(inputId, imgId, phId) {
+        const input = document.getElementById(inputId);
+        const preview = document.getElementById(imgId);
+        const placeholder = document.getElementById(phId);
+
+        if (input.files && input.files[0]) {
+          const reader = new FileReader();
+          reader.onload = function (e) {
+            preview.src = e.target.result;
+            preview.style.display = "block";
+            placeholder.style.display = "none";
+          };
+          reader.readAsDataURL(input.files[0]);
+        }
+      }
+
+      async function analyzeData() {
+        const dashcam = document.getElementById("dashcam").files[0];
+        const cabin = document.getElementById("cabin").files[0];
+        const btn = document.getElementById("analyze-btn");
+
+        if (!dashcam || !cabin) {
+          alert("Please select both Dashcam and Cabin images.");
+          return;
+        }
+
+        btn.disabled = true;
+        btn.innerText = "Analyzing Feeds...";
+
+        document.getElementById("results").style.display = "block";
+        document.getElementById("res-obj").innerText = "Processing...";
+        document.getElementById("res-drv").innerText = "Processing...";
+        document.getElementById("res-sgn").innerText = "Processing...";
+        document.getElementById("res-lane").innerText = "Processing...";
+
+        const formData = new FormData();
+        formData.append("dashcam", dashcam);
+        formData.append("cabin", cabin);
+
+        try {
+          const response = await fetch("/analyze", {
+            method: "POST",
+            body: formData,
+          });
+          const data = await response.json();
+
+          document.getElementById("res-obj").innerText = data.objects;
+          document.getElementById("res-drv").innerText = data.behavior;
+          document.getElementById("res-sgn").innerText = data.sign;
+          document.getElementById("res-lane").innerText = data.lane;
+        } catch (err) {
+          alert("Server communication error.");
+        } finally {
+          btn.disabled = false;
+          btn.innerText = "Analyze Feeds";
+        }
+      }
+    </script>
+  </body>
+</html>
