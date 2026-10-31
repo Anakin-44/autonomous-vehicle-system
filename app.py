@@ -2,6 +2,7 @@
 import os
 import io
 import logging
+from threading import Lock
 
 import cv2
 import numpy as np
@@ -12,9 +13,9 @@ from flask import Flask, render_template, request, jsonify
 from ultralytics import YOLO
 
 
-# ==================================================
+# ==========================================================
 # 1. FLASK CONFIGURATION
-# ==================================================
+# ==========================================================
 
 app = Flask(__name__, template_folder="templates")
 
@@ -25,9 +26,9 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
-# ==================================================
+# ==========================================================
 # 2. MODEL PATHS
-# ==================================================
+# ==========================================================
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
@@ -40,9 +41,9 @@ BEHAVIOR_PATH = os.path.join(
 )
 
 
-# ==================================================
+# ==========================================================
 # 3. DRIVER BEHAVIOR CLASSES
-# ==================================================
+# ==========================================================
 
 DRIVER_STATES = [
     "Safe Driving",
@@ -58,31 +59,35 @@ DRIVER_STATES = [
 ]
 
 
-# ==================================================
-# 4. KERAS COMPATIBILITY LAYERS
-# ==================================================
+# ==========================================================
+# 4. MODEL STATE
+# ==========================================================
+
+# Models are initialized only when first needed.
+yolo_model = None
+behavior_model = None
+
+# Prevent simultaneous initialization by multiple requests.
+model_lock = Lock()
+
+
+# ==========================================================
+# 5. KERAS COMPATIBILITY LAYERS
+# ==========================================================
 
 class CompatibleDense(tf.keras.layers.Dense):
-    """
-    Handle a newer Keras Dense configuration when the
-    quantization_config field is unsupported by the runtime.
-    """
+    """Handle unsupported quantization_config metadata."""
 
     @classmethod
     def from_config(cls, config):
         config = config.copy()
-
-        # This is safe only for an ordinary, non-quantized
-        # model whose saved weights are already usable.
         config.pop("quantization_config", None)
 
         return super().from_config(config)
 
 
 class CompatibleRescaling(tf.keras.layers.Rescaling):
-    """
-    Handle serialized dtype policies from newer Keras versions.
-    """
+    """Handle serialized dtype policies from newer Keras."""
 
     @classmethod
     def from_config(cls, config):
@@ -104,9 +109,7 @@ class CompatibleRescaling(tf.keras.layers.Rescaling):
 
 
 class FixedInputLayer(tf.keras.layers.InputLayer):
-    """
-    Compatibility handling for older InputLayer configurations.
-    """
+    """Handle certain older/newer InputLayer configurations."""
 
     @classmethod
     def from_config(cls, config):
@@ -122,12 +125,12 @@ class FixedInputLayer(tf.keras.layers.InputLayer):
         return super().from_config(config)
 
 
-# ==================================================
-# 5. LOAD DEEP LEARNING MODELS
-# ==================================================
+# ==========================================================
+# 6. LOAD MODELS
+# ==========================================================
 
 def load_models():
-    """Load YOLO and the driver behavior classifier."""
+    """Load and validate both deep-learning models."""
 
     if not os.path.isfile(YOLO_PATH):
         raise FileNotFoundError(
@@ -143,6 +146,7 @@ def load_models():
 
     yolo = YOLO(YOLO_PATH)
 
+    logger.info("YOLO model loaded successfully.")
     logger.info("Loading driver behavior model...")
 
     behavior = tf.keras.models.load_model(
@@ -155,21 +159,20 @@ def load_models():
         compile=False,
     )
 
-    # Verify the model's output class count.
     output_shape = behavior.output_shape
 
     if isinstance(output_shape, list):
         raise ValueError(
-            "The driver behavior model has multiple outputs. "
-            "Update the inference code to handle them."
+            "The behavior model has multiple outputs. "
+            "The current inference code expects one output."
         )
 
     output_classes = output_shape[-1]
 
     if output_classes != len(DRIVER_STATES):
         raise ValueError(
-            f"Model output classes: {output_classes}; "
-            f"expected: {len(DRIVER_STATES)}."
+            f"Model outputs {output_classes} classes, "
+            f"but {len(DRIVER_STATES)} classes are configured."
         )
 
     logger.info(
@@ -182,47 +185,84 @@ def load_models():
     return yolo, behavior
 
 
-# Load once when the application starts.
-yolo_model, behavior_model = load_models()
+# ==========================================================
+# 7. LAZY MODEL INITIALIZATION
+# ==========================================================
+
+def get_models():
+    """
+    Initialize models on the first analysis request.
+    Subsequent requests reuse the loaded models.
+    """
+
+    global yolo_model, behavior_model
+
+    if yolo_model is not None and behavior_model is not None:
+        return yolo_model, behavior_model
+
+    with model_lock:
+
+        # Check again after acquiring the lock.
+        if yolo_model is None or behavior_model is None:
+            logger.info("Initializing deep-learning models...")
+
+            # Assign only after both models load successfully.
+            yolo, behavior = load_models()
+
+            yolo_model = yolo
+            behavior_model = behavior
+
+            logger.info("Model initialization completed.")
+
+    return yolo_model, behavior_model
 
 
-# ==================================================
-# 6. HOME PAGE
-# ==================================================
+# ==========================================================
+# 8. HOME PAGE
+# ==========================================================
 
 @app.route("/", methods=["GET"])
 def home():
     return render_template("index.html")
 
 
-# ==================================================
-# 7. HEALTH CHECK
-# ==================================================
+# ==========================================================
+# 9. HEALTH CHECK
+# ==========================================================
 
 @app.route("/health", methods=["GET"])
 def health():
+
+    models_loaded = (
+        yolo_model is not None
+        and behavior_model is not None
+    )
+
     return jsonify({
         "status": "ok",
+        "models_loaded": models_loaded,
         "yolo_loaded": yolo_model is not None,
         "behavior_model_loaded": behavior_model is not None,
     }), 200
 
 
-# ==================================================
-# 8. ANALYZE UPLOADED IMAGES
-# ==================================================
+# ==========================================================
+# 10. ANALYZE IMAGES
+# ==========================================================
 
 @app.route("/analyze", methods=["POST"])
 def analyze():
+
+    # ----------------------------------------------
+    # Validate uploaded files
+    # ----------------------------------------------
 
     dashcam_file = request.files.get("dashcam")
     cabin_file = request.files.get("cabin")
 
     if dashcam_file is None or cabin_file is None:
         return jsonify({
-            "error": (
-                "Please upload both dashcam and cabin images."
-            )
+            "error": "Please upload both dashcam and cabin images."
         }), 400
 
     if not dashcam_file.filename or not cabin_file.filename:
@@ -231,7 +271,7 @@ def analyze():
         }), 400
 
     # ----------------------------------------------
-    # Validate and decode images
+    # Read images
     # ----------------------------------------------
 
     try:
@@ -252,14 +292,36 @@ def analyze():
             "error": "One or both uploaded files are invalid images."
         }), 400
 
+    # ----------------------------------------------
+    # Initialize models when needed
+    # ----------------------------------------------
+
     try:
+        yolo, behavior = get_models()
+
+    except Exception:
+        logger.exception("Model initialization failed")
+
+        return jsonify({
+            "error": (
+                "The deep-learning models could not be loaded. "
+                "Please check the server logs."
+            )
+        }), 500
+
+    # ----------------------------------------------
+    # Run inference
+    # ----------------------------------------------
+
+    try:
+
         # ==========================================
         # A. OBJECT DETECTION — YOLOv8
         # ==========================================
 
         logger.info("Running YOLO object detection...")
 
-        yolo_results = yolo_model(
+        yolo_results = yolo(
             dashcam_img,
             verbose=False,
         )
@@ -268,6 +330,7 @@ def analyze():
         person_count = 0
 
         for box in yolo_results[0].boxes:
+
             class_id = int(box.cls[0])
 
             # COCO class IDs:
@@ -306,24 +369,23 @@ def analyze():
             axis=0,
         )
 
-        # IMPORTANT:
-        # This assumes the model's Rescaling layer handles
-        # normalization internally, as in the original model.
+        # The model's own Rescaling layer is expected
+        # to perform normalization, as in training.
 
-        predictions = behavior_model.predict(
+        predictions = behavior.predict(
             cabin_array,
             verbose=0,
         )
 
         class_idx = int(np.argmax(predictions[0]))
 
-        confidence = (
-            float(np.max(predictions[0])) * 100
-        )
+        confidence = float(
+            np.max(predictions[0])
+        ) * 100
 
         if not 0 <= class_idx < len(DRIVER_STATES):
             raise ValueError(
-                f"Unexpected class index: {class_idx}"
+                f"Unexpected behavior class index: {class_idx}"
             )
 
         behavior_text = (
@@ -339,7 +401,7 @@ def analyze():
             "objects": obj_text,
             "behavior": behavior_text,
 
-            # These are placeholders, not actual predictions.
+            # These two outputs remain placeholders.
             "sign": "Traffic Sign model integration pending",
             "lane": "Lane Detection model integration pending",
         }), 200
@@ -349,20 +411,22 @@ def analyze():
 
         return jsonify({
             "error": (
-                "Analysis failed. Please check the server logs."
+                "Image analysis failed. "
+                "Please check the server logs."
             )
         }), 500
 
 
-# ==================================================
-# 9. ERROR HANDLERS
-# ==================================================
+# ==========================================================
+# 11. ERROR HANDLERS
+# ==========================================================
 
 @app.errorhandler(413)
 def request_too_large(error):
     return jsonify({
         "error": (
-            "Uploaded files exceed the 10 MB total request limit."
+            "The uploaded files exceed the 10 MB "
+            "total request size limit."
         )
     }), 413
 
@@ -376,11 +440,12 @@ def internal_server_error(error):
     }), 500
 
 
-# ==================================================
-# 10. APPLICATION ENTRY POINT
-# ==================================================
+# ==========================================================
+# 12. LOCAL DEVELOPMENT ENTRY POINT
+# ==========================================================
 
 if __name__ == "__main__":
+
     port = int(os.environ.get("PORT", 5000))
 
     app.run(
